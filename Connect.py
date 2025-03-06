@@ -1,18 +1,21 @@
 import socket
 import time
-from sensor import Gyroscope
+import androidhelper  # Built-in for Pydroid 3
 
-# Replace with your laptop's IP address
-LAPTOP_IP = "192.168.x.x"  # Find it using `ipconfig` or `ifconfig`
-PORT = 8888  # UDP Port (same as on the receiver)
+# Replace with your laptop's IP
+LAPTOP_IP = "192.168.1.1"
+PORT = 8888
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # UDP Socket
+droid = androidhelper.Android()
 
-gyro = Gyroscope()
+droid.startSensingTimed(2, 50)  # Start gyroscope sensor, update every 50ms
 
 while True:
-    x, y, z = gyro.read()  # Read gyroscope data
-    data = f"{x},{y},{z}"
-    
-    sock.sendto(data.encode(), (LAPTOP_IP, PORT))  # Send over UDP
-    time.sleep(0.1)  # Send every 100ms
+    sensor_data = droid.sensorsGetGyroscope().result  # Read gyro
+    if sensor_data:
+        x, y, z = sensor_data["x"], sensor_data["y"], sensor_data["z"]
+        data = f"{x},{y},{z}"
+        sock.sendto(data.encode(), (LAPTOP_IP, PORT))  # Send via UDP
+        print("Sent:", data)  # Debugging
+    time.sleep(0.1)
