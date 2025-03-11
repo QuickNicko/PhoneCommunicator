@@ -1,59 +1,61 @@
-import pygame
+from kivy.app import App
+from kivy.uix.floatlayout import FloatLayout
+from kivy.uix.widget import Widget
+from kivy.graphics import Ellipse, Color
 import socket
 import math
-import time
-
-# Initialize pygame
-pygame.init()
-
-# Screen settings
-WIDTH, HEIGHT = 400, 400
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Virtual Joystick")
-
-# Joystick settings
-JOYSTICK_RADIUS = 50
-CENTER = (WIDTH // 2, HEIGHT // 2)
-MAX_DISTANCE = 60  # Limit joystick movement range
 
 # Network settings
 UDP_IP = "192.168.1.100"  # Change this to your laptop's IP
 UDP_PORT = 5005
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-running = True
-joystick_pos = CENTER
+class Joystick(Widget):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.max_distance = 60
 
-while running:
-    screen.fill((30, 30, 30))  # Background color
-    
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
-        elif event.type == pygame.MOUSEBUTTONDOWN or event.type == pygame.MOUSEMOTION:
-            if pygame.mouse.get_pressed()[0]:
-                mouse_x, mouse_y = pygame.mouse.get_pos()
-                dx, dy = mouse_x - CENTER[0], mouse_y - CENTER[1]
-                distance = math.sqrt(dx ** 2 + dy ** 2)
-                if distance > MAX_DISTANCE:
-                    angle = math.atan2(dy, dx)
-                    dx = MAX_DISTANCE * math.cos(angle)
-                    dy = MAX_DISTANCE * math.sin(angle)
-                joystick_pos = (int(CENTER[0] + dx), int(CENTER[1] + dy))
-        elif event.type == pygame.MOUSEBUTTONUP:
-            joystick_pos = CENTER
-    
-    # Draw joystick
-    pygame.draw.circle(screen, (200, 0, 0), CENTER, MAX_DISTANCE)  # Outer boundary
-    pygame.draw.circle(screen, (0, 200, 0), joystick_pos, JOYSTICK_RADIUS)  # Inner joystick
-    
-    # Send joystick data
+        with self.canvas:
+            Color(0.8, 0, 0, 0.5)  # Outer circle color
+            self.outer_circle = Ellipse(size=(120, 120))
 
-    x, y = joystick_pos[0] - CENTER[0], joystick_pos[1] - CENTER[1]
-    sock.sendto(f"{x},{y}".encode(), (UDP_IP, UDP_PORT))
-    print(x, y)
-    time.sleep(0.01)
-    
-    pygame.display.flip()
-    
-pygame.quit()
+            Color(0, 0.8, 0, 1)  # Joystick color
+            self.joystick = Ellipse(size=(50, 50))
+
+        self.bind(pos=self.update_graphics, size=self.update_graphics)
+
+    def update_graphics(self, *args):
+        self.center_x = self.parent.width / 2
+        self.center_y = self.parent.height / 2
+        self.joystick_x = self.center_x
+        self.joystick_y = self.center_y
+        self.outer_circle.pos = (self.center_x - 60, self.center_y - 60)
+        self.joystick.pos = (self.joystick_x - 25, self.joystick_y - 25)
+
+    def on_touch_move(self, touch):
+        dx, dy = touch.x - self.center_x, touch.y - self.center_y
+        distance = math.sqrt(dx ** 2 + dy ** 2)
+        if distance > self.max_distance:
+            angle = math.atan2(dy, dx)
+            dx = self.max_distance * math.cos(angle)
+            dy = self.max_distance * math.sin(angle)
+        self.joystick_x = self.center_x + dx
+        self.joystick_y = self.center_y + dy
+        self.joystick.pos = (self.joystick_x - 25, self.joystick_y - 25)
+        sock.sendto(f"{dx},{dy}".encode(), (UDP_IP, UDP_PORT))
+
+    def on_touch_up(self, touch):
+        self.joystick_x = self.center_x
+        self.joystick_y = self.center_y
+        self.joystick.pos = (self.joystick_x - 25, self.joystick_y - 25)
+        sock.sendto(f"0,0".encode(), (UDP_IP, UDP_PORT))
+
+class JoystickApp(App):
+    def build(self):
+        layout = FloatLayout()
+        joystick = Joystick()
+        layout.add_widget(joystick)
+        return layout
+
+if __name__ == "__main__":
+    JoystickApp().run()
